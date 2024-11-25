@@ -1,108 +1,138 @@
-import React, {useState} from 'react';
-import type {PropsWithChildren} from 'react';
-import { KeyboardAvoidingView, Keyboard, Platform, SafeAreaView, ScrollView, StatusBar, StyleSheet, Text, TextInput, TouchableOpacity, useColorScheme, View } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { ActivityIndicator, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
-import { Colors, DebugInstructions, Header, LearnMoreLinks, ReloadInstructions } from 'react-native/Libraries/NewAppScreen';
-
-import Task from './components/Task'
+import TodoList from './components/TodoList';
+import { api, TodoList as TodoListType } from './services/api';
 
 function App(): React.JSX.Element {
-  const [task, setTask] = useState();
-  const [taskItems, setTaskItems] = useState([]);
+  const [lists, setLists] = useState<TodoListType[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const handleAddTask = () => {
-    Keyboard.dismiss();
-    setTaskItems([...taskItems, task]);
-    setTask(null);
-  }
+  useEffect(() => {
+    loadLists();
+  }, []);
 
-  const completeTask = (index) => {
-    let itemsCopy = [...taskItems];
-    itemsCopy.splice(index, 1);
-    setTaskItems(itemsCopy);
-  }
+  const loadLists = async () => {
+    try {
+      const fetchedLists = await api.getTodoLists();
+      setLists(fetchedLists);
+    } catch (error) {
+      console.error('Failed to load lists:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const addNewList = async () => {
+    try {
+      const newList = await api.createTodoList(`List ${lists.length + 1}`);
+      setLists([...lists, newList]);
+    } catch (error) {
+      console.error('Failed to create list:', error);
+    }
+  };
+
+  const updateListTitle = async (listId: number, newTitle: string) => {
+    try {
+      const updatedList = await api.updateTodoList(listId, newTitle);
+      setLists(lists.map(list =>
+        list.id === listId ? updatedList : list
+      ));
+    } catch (error) {
+      console.error('Failed to update list:', error);
+    }
+  };
+
+  const deleteList = async (listId: number) => {
+    try {
+      await api.deleteTodoList(listId);
+      setLists(lists.filter(list => list.id !== listId));
+    } catch (error) {
+      console.error('Failed to delete list:', error);
+    }
+  };
 
   return (
-    <View style={styles.container}>
-
-      {/* today's tasks */}
-      <View style={styles.tasksWrapper}>
-        <Text style={styles.sectionTitle}>Today's tasks</Text>
-
-        {/* task items */}
-        <View style={styles.items}>
-          {
-            taskItems.map((item, index) => {
-              return (
-                <TouchableOpacity key={index} onPress={() => completeTask(index)}>
-                  <Task text={item}></Task>
-                </TouchableOpacity>
-              )
-            })
-          }
-          {/* <Task text={'Task 1'}/>
-          <Task text={'Task 2'}/> */}
-        </View>
+    <SafeAreaView style={styles.container}>
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>My Todo Lists</Text>
+        <TouchableOpacity style={styles.addListButton} onPress={addNewList}>
+          <Text style={styles.addListButtonText}>+ New List</Text>
+        </TouchableOpacity>
       </View>
 
-      {/* write a task */}
-      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.writeTaskWrapper}>
-        <TextInput style={styles.input} placeholder={'Write a task'} value={task} onChangeText={text => setTask(text)}></TextInput>
-        <TouchableOpacity onPress={() => handleAddTask()}>
-          <View style={styles.addWrapper}>
-            <Text style={styles.addText}>+</Text>
-          </View>
-        </TouchableOpacity>
-      </KeyboardAvoidingView> 
-
-    </View>
+      {isLoading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#3498db" />
+        </View>
+      ) : (
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollViewContent}
+        >
+          {lists.map(list => (
+            <TodoList
+              key={list.id}
+              id={list.id}
+              title={list.name}
+              onUpdateTitle={(newTitle) => updateListTitle(list.id, newTitle)}
+              onDeleteList={() => deleteList(list.id)}
+            />
+          ))}
+        </ScrollView>
+      )}
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#E8AEAED'
+    backgroundColor: '#E8EAED',
   },
-  tasksWrapper: {
-    paddingTop: 50,
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     paddingHorizontal: 20,
+    paddingTop: Platform.OS === 'ios' ? 20 : 40,
+    paddingBottom: 20,
+    backgroundColor: '#fff',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
   },
-  sectionTitle: {
+  headerTitle: {
     fontSize: 24,
     fontWeight: 'bold',
+    color: '#2c3e50',
   },
-  items: {
-    marginTop: 30
-  },
-  writeTaskWrapper: {
-    position: 'absolute',
-    bottom: 60,
-    width: '100%',
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    alignItems: 'center'
-  },
-  input: {
-    paddingVertical: 15,
+  addListButton: {
+    backgroundColor: '#3498db',
     paddingHorizontal: 15,
-    backgroundColor: '#FFF',
-    borderRadius: 60,
-    borderColor: '#C0C0C0',
-    borderWidth: 1,
-    width: 250
+    paddingVertical: 8,
+    borderRadius: 20,
   },
-  addWrapper: {
-    width: 60,
-    height: 60,
-    backgroundColor: '#FFF',
-    borderRadius: 60,
+  addListButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+  },
+  loadingContainer: {
+    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    borderColor: '#C0C0C0',
-    borderWidth: 1,
   },
-  addText: {}
+  scrollView: {
+    flex: 1,
+  },
+  scrollViewContent: {
+    padding: 20,
+  },
 });
 
 export default App;
