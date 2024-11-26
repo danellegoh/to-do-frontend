@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, ActivityIndicator, Alert } from 'react-native';
 import Task from './Task';
-import { api } from '../services/api';
+import { api, Todo } from '../services/api';
 
 interface TodoListProps {
     id: number;
@@ -11,7 +11,7 @@ interface TodoListProps {
 }
 
 const TodoList = ({ id, title, onUpdateTitle, onDeleteList }: TodoListProps) => {
-    const [tasks, setTasks] = useState<any[]>([]);
+    const [tasks, setTasks] = useState<Todo[]>([]);
     const [newTask, setNewTask] = useState('');
     const [isEditingTitle, setIsEditingTitle] = useState(false);
     const [editedTitle, setEditedTitle] = useState(title);
@@ -49,9 +49,9 @@ const TodoList = ({ id, title, onUpdateTitle, onDeleteList }: TodoListProps) => 
     const toggleTaskCompletion = async (taskId: number, currentStatus: boolean) => {
         try {
             setIsUpdating(taskId);
-            await api.updateTodo(taskId, { is_done: !currentStatus });
+            const updatedTodo = await api.updateTodo(taskId, { is_done: !currentStatus });
             setTasks(tasks.map(task => 
-                task.id === taskId ? { ...task, is_done: !currentStatus } : task
+                task.id === taskId ? updatedTodo : task
             ));
         } catch (error) {
             console.error('Failed to update task:', error);
@@ -60,76 +60,118 @@ const TodoList = ({ id, title, onUpdateTitle, onDeleteList }: TodoListProps) => 
         }
     };
 
+    const handleUpdateTask = async (taskId: number, newDescription: string) => {
+        try {
+            setIsUpdating(taskId);
+            const updatedTodo = await api.updateTodo(taskId, { description: newDescription });
+            setTasks(tasks.map(task => 
+                task.id === taskId ? updatedTodo : task
+            ));
+        } catch (error) {
+            console.error('Failed to update task:', error);
+        } finally {
+            setIsUpdating(null);
+        }
+    };
+
+    const handleDeleteTask = async (taskId: number) => {
+        try {
+            setIsUpdating(taskId);
+            await api.deleteTodo(taskId);
+            setTasks(tasks.filter(task => task.id !== taskId));
+        } catch (error) {
+            console.error('Failed to delete task:', error);
+        } finally {
+            setIsUpdating(null);
+        }
+    };
+
+    const handleTitleSubmit = () => {
+        if (editedTitle.trim() && editedTitle !== title) {
+            onUpdateTitle(editedTitle.trim());
+        } else {
+            setEditedTitle(title);
+        }
+        setIsEditingTitle(false);
+    };
+
+    const handleDeleteList = () => {
+        Alert.alert(
+            "Delete List",
+            "Are you sure you want to delete this list? This will also delete all tasks in this list.",
+            [
+                {
+                    text: "Cancel",
+                    style: "cancel"
+                },
+                {
+                    text: "Delete",
+                    onPress: onDeleteList,
+                    style: "destructive"
+                }
+            ]
+        );
+    };
+
     return (
         <View style={styles.listContainer}>
             <View style={styles.headerContainer}>
-                {isEditingTitle ? (
-                    <View style={styles.titleEditContainer}>
+                <View style={styles.titleContainer}>
+                    {isEditingTitle ? (
                         <TextInput
                             style={styles.titleInput}
                             value={editedTitle}
                             onChangeText={setEditedTitle}
-                            onBlur={() => {
-                                if (editedTitle.trim() && editedTitle !== title) {
-                                    onUpdateTitle(editedTitle);
-                                }
-                                setIsEditingTitle(false);
-                            }}
+                            onBlur={handleTitleSubmit}
                             autoFocus
+                            multiline
                         />
-                    </View>
-                ) : (
-                    <TouchableOpacity onPress={() => setIsEditingTitle(true)}>
-                        <Text style={styles.title}>{title || 'Untitled List'}</Text>
-                    </TouchableOpacity>
-                )}
-                <TouchableOpacity onPress={onDeleteList} style={styles.deleteButton}>
+                    ) : (
+                        <TouchableOpacity 
+                            onPress={() => setIsEditingTitle(true)}
+                            style={styles.titleTouchable}
+                        >
+                            <Text style={styles.listTitle}>{title}</Text>
+                        </TouchableOpacity>
+                    )}
+                </View>
+                <TouchableOpacity onPress={handleDeleteList} style={styles.deleteButton}>
                     <Text style={styles.deleteButtonText}>×</Text>
                 </TouchableOpacity>
             </View>
 
-            <View style={styles.tasksContainer}>
+            <View style={styles.tasksWrapper}>
                 {isLoading ? (
-                    <ActivityIndicator size="large" color="#3498db" />
+                    <ActivityIndicator size="large" color="#0000ff" />
                 ) : (
-                    tasks.map((task) => (
-                        <View 
-                            key={task.id} 
-                            style={styles.taskTouchable}
-                        >
-                            <View style={styles.taskWrapper}>
-                                <Task 
-                                    text={task.description} 
-                                    completed={task.is_done} 
-                                    onToggle={() => toggleTaskCompletion(task.id, task.is_done)}
-                                />
-                                {isUpdating === task.id && (
-                                    <ActivityIndicator 
-                                        size="small" 
-                                        color="#3498db" 
-                                        style={styles.updateIndicator}
-                                    />
-                                )}
-                            </View>
-                        </View>
+                    tasks.map(task => (
+                        <Task
+                            key={task.id}
+                            id={task.id}
+                            description={task.description}
+                            is_done={task.is_done}
+                            onToggle={() => toggleTaskCompletion(task.id, task.is_done)}
+                            onEdit={(newDescription) => handleUpdateTask(task.id, newDescription)}
+                            onDelete={() => handleDeleteTask(task.id)}
+                        />
                     ))
                 )}
             </View>
 
             <KeyboardAvoidingView 
                 behavior={Platform.OS === "ios" ? "padding" : "height"}
-                style={styles.inputContainer}
+                style={styles.writeTaskWrapper}
             >
-                <TextInput
-                    style={styles.input}
+                <TextInput 
+                    style={styles.input} 
+                    placeholder={'Write a task'} 
                     value={newTask}
-                    onChangeText={setNewTask}
-                    placeholder="Add a task"
-                    placeholderTextColor="#666"
+                    onChangeText={text => setNewTask(text)}
+                    onSubmitEditing={handleAddTask}
                 />
                 <TouchableOpacity onPress={handleAddTask}>
-                    <View style={styles.addButton}>
-                        <Text style={styles.addButtonText}>+</Text>
+                    <View style={styles.addWrapper}>
+                        <Text style={styles.addText}>+</Text>
                     </View>
                 </TouchableOpacity>
             </KeyboardAvoidingView>
@@ -141,7 +183,7 @@ const styles = StyleSheet.create({
     listContainer: {
         backgroundColor: '#fff',
         padding: 20,
-        borderRadius: 15,
+        borderRadius: 10,
         marginBottom: 20,
         shadowColor: '#000',
         shadowOffset: {
@@ -155,84 +197,74 @@ const styles = StyleSheet.create({
     headerContainer: {
         flexDirection: 'row',
         justifyContent: 'space-between',
-        alignItems: 'center',
+        alignItems: 'flex-start',
         marginBottom: 20,
     },
-    title: {
-        fontSize: 20,
-        fontWeight: 'bold',
-        color: '#2c3e50',
-    },
-    titleEditContainer: {
+    titleContainer: {
         flex: 1,
         marginRight: 10,
     },
-    titleInput: {
-        fontSize: 20,
+    titleTouchable: {
+        flex: 1,
+    },
+    listTitle: {
+        fontSize: 24,
         fontWeight: 'bold',
-        color: '#2c3e50',
+        flexWrap: 'wrap',
+    },
+    titleInput: {
+        fontSize: 24,
+        fontWeight: 'bold',
         borderBottomWidth: 1,
-        borderBottomColor: '#3498db',
-        paddingVertical: 5,
+        borderBottomColor: '#55BCF6',
+        padding: 0,
+        textAlignVertical: 'top',
+        minHeight: 30,
     },
     deleteButton: {
         width: 30,
         height: 30,
         justifyContent: 'center',
         alignItems: 'center',
-        backgroundColor: '#e74c3c',
-        borderRadius: 15,
     },
     deleteButtonText: {
-        color: '#fff',
-        fontSize: 20,
+        color: '#FF0000',
+        fontSize: 24,
         fontWeight: 'bold',
     },
-    tasksContainer: {
-        marginBottom: 20,
+    tasksWrapper: {
+        marginTop: 10,
     },
-    taskTouchable: {
+    writeTaskWrapper: {
+        position: 'relative',
         width: '100%',
-        marginBottom: 12,
-    },
-    taskWrapper: {
-        width: '100%',
-        flexDirection: 'row',
-        alignItems: 'center',
-    },
-    updateIndicator: {
-        position: 'absolute',
-        right: -25,
-    },
-    inputContainer: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        backgroundColor: '#f5f6fa',
-        borderRadius: 10,
-        padding: 5,
+        marginTop: 20,
     },
     input: {
-        flex: 1,
-        marginRight: 10,
-        paddingVertical: 10,
+        paddingVertical: 15,
         paddingHorizontal: 15,
-        backgroundColor: '#fff',
-        borderRadius: 8,
-        color: '#2c3e50',
+        backgroundColor: '#FFF',
+        borderRadius: 60,
+        borderColor: '#C0C0C0',
+        borderWidth: 1,
+        width: '85%',
     },
-    addButton: {
+    addWrapper: {
         width: 40,
         height: 40,
-        backgroundColor: '#3498db',
+        backgroundColor: '#55BCF6',
         borderRadius: 20,
         justifyContent: 'center',
         alignItems: 'center',
+        borderColor: '#C0C0C0',
+        borderWidth: 1,
     },
-    addButtonText: {
-        color: '#fff',
-        fontSize: 24,
-        fontWeight: 'bold',
+    addText: {
+        color: '#FFF',
+        fontSize: 20,
     },
 });
 

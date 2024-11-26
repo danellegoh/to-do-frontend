@@ -1,26 +1,95 @@
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, Alert } from 'react-native';
 
 interface TaskProps {
-    text: string;
-    completed: boolean;
+    id: number;
+    description: string;
+    is_done: boolean;
     onToggle: () => void;
+    onEdit: (newDescription: string) => void;
+    onDelete: () => void;
 }
 
-const Task = ({ text, completed, onToggle }: TaskProps) => {
+const Task = ({ id, description = '', is_done = false, onToggle, onEdit, onDelete }: TaskProps) => {
+    const [isEditing, setIsEditing] = useState(false);
+    const [editText, setEditText] = useState(description || '');
+    const [isSubmitting, setIsSubmitting] = useState(false);
+
+    useEffect(() => {
+        setEditText(description || '');
+    }, [description]);
+
+    const handleSubmitEditing = () => {
+        if (isSubmitting) return;
+        setIsSubmitting(true);
+        
+        const trimmedText = (editText || '').trim();
+        if (trimmedText && trimmedText !== description) {
+            onEdit(trimmedText);
+        } else {
+            setEditText(description || '');
+        }
+        setIsEditing(false);
+        
+        setTimeout(() => {
+            setIsSubmitting(false);
+        }, 100);
+    };
+
+    const handleDelete = () => {
+        Alert.alert(
+            "Delete Task",
+            "Are you sure you want to delete this task?",
+            [
+                {
+                    text: "Cancel",
+                    style: "cancel"
+                },
+                {
+                    text: "Delete",
+                    onPress: onDelete,
+                    style: "destructive"
+                }
+            ]
+        );
+    };
+
     return (
-        <TouchableOpacity onPress={onToggle}>
-            <View style={[styles.item, completed && styles.itemCompleted]}>
-                <View style={styles.itemLeft}>
-                    <View style={[styles.square, completed && styles.squareCompleted]} />
-                    <Text style={[styles.itemText, completed && styles.itemTextCompleted]} numberOfLines={1}>
-                        {text}
-                    </Text>
+        <View style={styles.item}>
+            <TouchableOpacity onPress={onToggle} style={styles.checkbox}>
+                <View style={[styles.square, is_done && styles.squareCompleted]}>
+                    {is_done && <Text style={styles.checkmark}>✓</Text>}
                 </View>
-                <View style={[styles.circular, completed && styles.circularCompleted]} />
+            </TouchableOpacity>
+            
+            <View style={styles.itemCenter}>
+                {isEditing ? (
+                    <TextInput
+                        style={styles.input}
+                        value={editText || ''}
+                        onChangeText={(text) => setEditText(text || '')}
+                        onBlur={handleSubmitEditing}
+                        autoFocus
+                        multiline
+                        returnKeyType="done"
+                    />
+                ) : (
+                    <TouchableOpacity 
+                        onPress={() => setIsEditing(true)}
+                        style={styles.textContainer}
+                    >
+                        <Text style={[styles.itemText, is_done && styles.itemTextCompleted]}>
+                            {description || ''}
+                        </Text>
+                    </TouchableOpacity>
+                )}
             </View>
-        </TouchableOpacity>
-    )
+
+            <TouchableOpacity onPress={handleDelete} style={styles.deleteButton}>
+                <Text style={styles.deleteButtonText}>×</Text>
+            </TouchableOpacity>
+        </View>
+    );
 }
 
 const styles = StyleSheet.create({
@@ -32,58 +101,79 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'space-between',
         width: '100%',
+        marginBottom: 10,
         shadowColor: '#000',
         shadowOffset: {
             width: 0,
             height: 1,
         },
-        shadowOpacity: 0.22,
-        shadowRadius: 2.22,
-        elevation: 3,
+        shadowOpacity: 0.1,
+        shadowRadius: 1,
+        elevation: 2,
     },
-    itemCompleted: {
-        backgroundColor: '#F5F5F5',
-        opacity: 0.8,
-    },
-    itemLeft: {
-        flexDirection: 'row',
-        alignItems: 'center',
+    itemCenter: {
         flex: 1,
+        marginHorizontal: 10,
+        justifyContent: 'center',
+    },
+    checkbox: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        height: 24,
+    },
+    textContainer: {
+        flex: 1,
+    },
+    input: {
+        flex: 1,
+        borderBottomWidth: 1,
+        borderBottomColor: '#55BCF6',
+        fontSize: 14,
+        padding: 0,
+        minHeight: 20,
+        textAlignVertical: 'center',
+    },
+    itemText: {
+        fontSize: 14,
+        lineHeight: 20,
+        flexWrap: 'wrap',
+    },
+    itemTextCompleted: {
+        textDecorationLine: 'line-through',
+        color: '#808080',
     },
     square: {
         width: 24,
         height: 24,
-        backgroundColor: '#3498db',
+        backgroundColor: '#55BCF6',
         opacity: 0.4,
         borderRadius: 5,
-        marginRight: 15,
-        flexShrink: 0,
+        justifyContent: 'center',
+        alignItems: 'center',
     },
     squareCompleted: {
-        backgroundColor: '#27ae60',
-        opacity: 0.6,
+        backgroundColor: '#55BCF6',
+        opacity: 0.9,
     },
-    itemText: {
-        flex: 1,
-        color: '#2c3e50',
+    checkmark: {
+        color: '#FFF',
         fontSize: 16,
+        lineHeight: 24,
+        textAlignVertical: 'center',
     },
-    itemTextCompleted: {
-        textDecorationLine: 'line-through',
-        color: '#7f8c8d',
+    deleteButton: {
+        width: 24,
+        height: 24,
+        justifyContent: 'center',
+        alignItems: 'center',
     },
-    circular: {
-        width: 12,
-        height: 12,
-        borderColor: '#3498db',
-        borderWidth: 2,
-        borderRadius: 5,
-        flexShrink: 0,
-        marginLeft: 15,
-    },
-    circularCompleted: {
-        backgroundColor: '#27ae60',
-        borderColor: '#27ae60',
+    deleteButtonText: {
+        color: '#FF0000',
+        fontSize: 24,
+        lineHeight: 24,
+        textAlignVertical: 'center',
+        includeFontPadding: false,
+        marginTop: -2, // Fine-tune vertical alignment
     },
 });
 

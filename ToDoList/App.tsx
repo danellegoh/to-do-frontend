@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ActivityIndicator, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View, Platform, RefreshControl } from 'react-native';
 
 import TodoList from './components/TodoList';
 import { api, TodoList as TodoListType } from './services/api';
@@ -7,6 +7,7 @@ import { api, TodoList as TodoListType } from './services/api';
 function App(): React.JSX.Element {
   const [lists, setLists] = useState<TodoListType[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     loadLists();
@@ -20,8 +21,14 @@ function App(): React.JSX.Element {
       console.error('Failed to load lists:', error);
     } finally {
       setIsLoading(false);
+      setRefreshing(false);
     }
   };
+
+  const onRefresh = React.useCallback(() => {
+    setRefreshing(true);
+    loadLists();
+  }, []);
 
   const addNewList = async () => {
     try {
@@ -52,6 +59,14 @@ function App(): React.JSX.Element {
     }
   };
 
+  if (isLoading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#3498db" />
+      </View>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
@@ -60,27 +75,26 @@ function App(): React.JSX.Element {
           <Text style={styles.addListButtonText}>+ New List</Text>
         </TouchableOpacity>
       </View>
-
-      {isLoading ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#3498db" />
-        </View>
-      ) : (
-        <ScrollView
-          style={styles.scrollView}
-          contentContainerStyle={styles.scrollViewContent}
-        >
-          {lists.map(list => (
-            <TodoList
-              key={list.id}
-              id={list.id}
-              title={list.name}
-              onUpdateTitle={(newTitle) => updateListTitle(list.id, newTitle)}
-              onDeleteList={() => deleteList(list.id)}
-            />
-          ))}
-        </ScrollView>
-      )}
+      <ScrollView 
+        style={styles.scrollView}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+          />
+        }
+        contentContainerStyle={styles.scrollViewContent}
+      >
+        {lists.map(list => (
+          <TodoList
+            key={list.id}
+            id={list.id}
+            title={list.name}
+            onUpdateTitle={(newTitle) => updateListTitle(list.id, newTitle)}
+            onDeleteList={() => deleteList(list.id)}
+          />
+        ))}
+      </ScrollView>
     </SafeAreaView>
   );
 }
